@@ -525,6 +525,10 @@ void MergeSort()
         arrayIndex++;
         rightIndex++;
     }
+
+    // Free the vectors to preserve space in memory
+    free(left);
+    free(right);
 }
 
 // -----------------------------------------------------------------------
