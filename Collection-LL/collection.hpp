@@ -379,6 +379,29 @@ inline T Collection<T>::back() const
 
 // -------------------------------Sorting---------------------------------
 
+// Sorts the collection by choosing a sorting algorithm based on collection size.
+template <typename T>
+inline void Collection<T>::sort()
+{
+    if (head == nullptr)
+    {
+        return;
+    }
+
+    if (size <= 50)
+    {
+        InsertionSort();
+    }
+    else if (size <= 150000)
+    {
+        QuickSort(head, traverseToTail());
+    }
+    else
+    {
+        MergeSort(head);
+    }
+}
+
 template <typename T>
 inline void Collection<T>::InsertionSort()
 {
