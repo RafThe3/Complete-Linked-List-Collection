@@ -3,6 +3,7 @@
 #include <string> // Provides std::string.
 #include <cstddef> // Provides std::size_t.
 #include <limits> // Provides numeric_limits for the NOT_FOUND sentinel.
+#include <utility> // Provides std::swap().
 #include "exceptions.hpp" // Defines IndexOutOfBounds.
 
 using std::size_t;
@@ -19,26 +20,38 @@ class Collection
     Collection();
     ~Collection();
 
-    // Copy constructor
+    // Copy constructor / copy assignment operator
     Collection(const Collection<T>& source);
+    Collection<T>& operator=(const Collection<T>& source);
+
+    // Move constructor / move assignment operator
+    Collection(Collection<T>&& source) noexcept;
+    Collection<T>& operator=(Collection<T>&& source) noexcept;
 
     // List
+
+    // Insertion
     void insert(const T& data, size_t index);
+    bool insertSorted(const T& data);
     void push_back(const T& data);
-    void pop_back(T& data);
+    void push_front(const T& data);
+
+    // Deletion
     void removeValue(const T& data);
     void removeAt(size_t index);
+    void pop_front(T& out);
+    void pop_back(T& data);
+    void clear();
+
+    // Replacement
+
+    // Swapping
+
+    // Searching
+    bool contains(const T& data) const;
     size_t search(const T& data) const;
     T at(size_t index) const;
 
-    // Stack
-    void push_front(const T& data);
-    void pop_front(T& out);
-    T top() const;
-
-    // Queue
-    void enqueue(const T& data);
-    void dequeue(T& out);
     T front() const;
     T back() const;
 
@@ -47,7 +60,6 @@ class Collection
 
     // Global
     bool isEmpty() const;
-    void clear();
     size_t getSize() const;
     string toString() const;
 
@@ -69,9 +81,13 @@ class Collection
     Node* head; // First node; nullptr means the list is empty.
     size_t size; // Number of nodes currently in the collection.
 
-    // Helpers for locating nodes without changing the collection.
-    Node* traverseToTail() const;
-    Node* traverseToIndex(size_t index) const;
+    // Non-const versions: Allow modification of the nodes.
+    Node* traverseToTail();
+    Node* traverseToIndex(size_t index);
+
+    // Const versions: Prevent modification of the nodes.
+    const Node* traverseToTail() const;
+    const Node* traverseToIndex(size_t index) const;
 
     // Sorting
     void InsertionSort();
@@ -80,22 +96,26 @@ class Collection
     Node* Merge(Node* left, Node* right);
 };
 
+// ------------------------Constructor / Destructor---------------------------
+
 // Default construction creates an empty collection.
 template <typename T>
-Collection<T>::Collection() : head(nullptr), size(0) {}
+inline Collection<T>::Collection() : head(nullptr), size(0) {}
 
 // Destroying a collection must release all nodes it owns.
 template <typename T>
-Collection<T>::~Collection()
+inline Collection<T>::~Collection()
 {
     clear();
 }
 
-// ------------------------Constructors / Destructors---------------------------
+// -----------------------------------------------------------------------------
+
+// --------------Copy Constructor / Copy Assignment Operator--------------------
 
 // Deep-copy constructor: create independent nodes containing the source values.
 template <typename T>
-Collection<T>::Collection(const Collection<T>& source) : head(nullptr), size(0)
+inline Collection<T>::Collection(const Collection<T>& source) : head(nullptr), size(0)
 {
     // Use a pointer to walk through the original list.
     Node* sourceNode = source.head;
@@ -123,9 +143,84 @@ Collection<T>::Collection(const Collection<T>& source) : head(nullptr), size(0)
     }
 }
 
+template <typename T>
+inline Collection<T>& Collection<T>::operator=(const Collection<T>& source)
+{
+    // Check whether the source and destination are the same object.
+    // If they are, return immediately to avoid unnecessary copying.
+    if (this == &source)
+    {
+        return *this;
+    }
+
+    // Create a temporary deep copy of the source collection.
+    // This allocates independent nodes without modifying the destination.
+    Collection<T> temp(source);
+
+    // Exchange the destination's head pointer with the temporary's head pointer.
+    // The destination now owns the newly copied nodes.
+    std::swap(head, temp.head);
+
+    // Exchange the node counts to keep both collections consistent.
+    std::swap(size, temp.size);
+
+    // Return the current collection to support assignment chaining.
+    return *this;
+}
+
 // -----------------------------------------------------------------------
 
-// ---------------------------------List---------------------------------
+// --------------Move Constructor / Move Assignment Operator--------------------
+
+template <typename T>
+inline Collection<T>::Collection(Collection<T>&& source) noexcept : head(source.head), size(source.size)
+{
+    // Transfer ownership of the source collection's nodes.
+    // The destination now points to the source's original linked list.
+
+    // Copy the source's node count into the destination.
+    // This keeps the destination's size consistent with its nodes.
+
+    // Reset the source head because it no longer owns the transferred nodes.
+    source.head = nullptr;
+
+    // Reset the source size to represent an empty collection.
+    source.size = 0;
+}
+
+template <typename T>
+inline Collection<T>& Collection<T>::operator=(Collection<T>&& source) noexcept
+{
+    // Check whether the source and destination are the same object.
+    // If they are, return immediately to avoid modifying the collection.
+    if (this == &source)
+    {
+        return *this;
+    }
+    
+    // Release the destination's existing nodes before taking ownership
+    // of the source collection's nodes.
+    clear();
+
+    // Transfer ownership of the source's linked-list nodes.
+    head = source.head;
+
+    // Transfer the source's node count to the destination.
+    size = source.size;
+
+    // Reset the source head because ownership has been transferred.
+    source.head = nullptr;
+
+    // Reset the source size to represent an empty collection.
+    source.size = 0;
+
+    // Return the destination collection to support assignment chaining.
+    return *this;
+}
+
+// -----------------------------------------------------------------------------
+
+// ---------------------------------List----------------------------------
 
 // Insert data at index; index == size means append to the end.
 template <typename T>
@@ -263,7 +358,7 @@ inline size_t Collection<T>::search(const T& data) const
 {
     // Traversal node
     // Begin at the head and inspect nodes one by one.
-    Node* currentNode = head;
+    const Node* currentNode = head;
 
     // Index of the node currently being inspected.
     size_t index = 0;
@@ -299,7 +394,7 @@ inline T Collection<T>::at(size_t index) const
     }
 
     // Traversal node
-    Node* currentNode = traverseToIndex(index);
+    const Node* currentNode = traverseToIndex(index);
 
     // Return data at index
     return currentNode->data;
@@ -307,9 +402,7 @@ inline T Collection<T>::at(size_t index) const
 
 // -----------------------------------------------------------------------
 
-// -------------------------------Stack-----------------------------------
-
-// Stack-style insertion: add a value at the beginning.
+// Add a value at the beginning.
 template <typename T>
 inline void Collection<T>::push_front(const T& data)
 {
@@ -332,7 +425,7 @@ inline void Collection<T>::pop_front(T& out)
 
 // Return the first value without removing it.
 template <typename T>
-inline T Collection<T>::top() const
+inline T Collection<T>::front() const
 {
     if (head == nullptr)
     {
@@ -342,36 +435,11 @@ inline T Collection<T>::top() const
     return head->data;
 }
 
-// -----------------------------------------------------------------------
-
-// --------------------------------Queue----------------------------------
-
-// Queue-style insertion: add a value at the back.
-template <typename T>
-inline void Collection<T>::enqueue(const T& data)
-{
-    insert(data, size);
-}
-
-// Queue-style removal: remove the value at the front.
-template <typename T>
-inline void Collection<T>::dequeue(T& out)
-{
-    pop_front(out);
-}
-
-// Return the queue's first value without removing it.
-template <typename T>
-inline T Collection<T>::front() const
-{
-    return top();
-}
-
 // Find and return the final value in the list.
 template <typename T>
 inline T Collection<T>::back() const
 {
-    Node* currentNode = traverseToTail();
+    const Node* currentNode = traverseToTail();
     return currentNode->data;
 }
 
@@ -391,10 +459,6 @@ inline void Collection<T>::sort()
     if (size <= 50)
     {
         InsertionSort();
-    }
-    else if (size <= 150000)
-    {
-        QuickSort(head, traverseToTail());
     }
     else
     {
@@ -648,11 +712,11 @@ inline typename Collection<T>::Node* Collection<T>::Merge(Node* left, Node* righ
 
 // Locate the final node; an empty collection has no tail to return.
 template <typename T>
-inline typename Collection<T>::Node* Collection<T>::traverseToTail() const
+inline typename Collection<T>::Node* Collection<T>::traverseToTail()
 {
     if (isEmpty())
     {
-        throw IndexOutOfBounds();
+        throw EmptyList();
     }
 
     // Starting at the head, follow size - 1 links to reach the tail.
@@ -666,9 +730,29 @@ inline typename Collection<T>::Node* Collection<T>::traverseToTail() const
     return currentNode;
 }
 
+// Locate the final node; an empty collection has no tail to return.
+template <typename T>
+inline const typename Collection<T>::Node* Collection<T>::traverseToTail() const
+{
+    if (isEmpty())
+    {
+        throw EmptyList();
+    }
+
+    // Starting at the head, follow size - 1 links to reach the tail.
+    const Node* currentNode = head;
+
+    for (size_t i = 0; i < size - 1; i++)
+    {
+        currentNode = currentNode->next;
+    }
+
+    return currentNode;
+}
+
 // Locate the node at index; reject an index outside the valid range.
 template <typename T>
-inline typename Collection<T>::Node* Collection<T>::traverseToIndex(size_t index) const
+inline typename Collection<T>::Node* Collection<T>::traverseToIndex(size_t index)
 {
     if (index >= size)
     {
@@ -676,6 +760,26 @@ inline typename Collection<T>::Node* Collection<T>::traverseToIndex(size_t index
     }
 
     Node* currentNode = head;
+
+    // Follow next pointers index times to reach the requested list node.
+    for (size_t i = 0; i < index; i++)
+    {
+        currentNode = currentNode->next;
+    }
+
+    return currentNode;
+}
+
+// Locate the node at index; reject an index outside the valid range.
+template <typename T>
+inline const typename Collection<T>::Node* Collection<T>::traverseToIndex(size_t index) const
+{
+    if (index >= size)
+    {
+        throw IndexOutOfBounds();
+    }
+
+    const Node* currentNode = head;
 
     // Follow next pointers index times to reach the requested list node.
     for (size_t i = 0; i < index; i++)
@@ -726,7 +830,7 @@ inline string Collection<T>::toString() const
 {
     stringstream ss; // Accumulate the output efficiently.
 
-    Node* currentNode = head; // Traverse from the first node.
+    const Node* currentNode = head; // Traverse from the first node.
 
     while (currentNode != nullptr)
     {
