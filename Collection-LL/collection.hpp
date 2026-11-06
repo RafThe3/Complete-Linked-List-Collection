@@ -43,9 +43,7 @@ class Collection
     T back() const;
 
     // Sorting
-    void InsertionSort();
-    void QuickSort(size_t low, size_t high);
-    void MergeSort();
+    void sort();
 
     // Global
     bool isEmpty() const;
@@ -74,6 +72,12 @@ class Collection
     // Helpers for locating nodes without changing the collection.
     Node* traverseToTail() const;
     Node* traverseToIndex(size_t index) const;
+
+    // Sorting
+    void InsertionSort();
+    void QuickSort(Node* low, Node* high);
+    void MergeSort(Node* &start);
+    Node* Merge(Node* left, Node* right);
 };
 
 // Default construction creates an empty collection.
@@ -376,159 +380,243 @@ inline T Collection<T>::back() const
 // -------------------------------Sorting---------------------------------
 
 template <typename T>
-void Collection<T>::InsertionSort()
+inline void Collection<T>::InsertionSort()
 {
-    // FIXME: PRETTY MUCH EVERYTHING
-    
+    // Start at the head of the collection.
     Node* currentNode = head;
 
-    // Start at index 1 because the first element is already
-    // considered sorted.
+    // Begin at index 1 because the first element is already considered sorted.
     for (size_t i = 1; i < size; i++)
     {
-        Node* prevNode = currentNode;
+        // Advance to the next element in the unsorted portion.
         currentNode = currentNode->next;
-
-        // Store the element that needs to be inserted.
+        
+        // Store the element that needs to be inserted into the sorted portion.
         T temp = currentNode->data;
 
-        // Start with the element immediately before temp.
-        size_t j = i - 1;
-
-        // Shift larger elements one position to the right
-        // until the correct position for temp is found.
-        while (prevNode->data > temp)
+        // Start searching from the beginning of the sorted portion.
+        Node* traversalNode = head;
+        
+        // Find the first node containing a value greater than temp.
+        // Continue traversing while values are less than or equal to temp.
+        while (traversalNode != currentNode && traversalNode->data <= temp)
         {
-            currentNode->data = prevNode->data;
-            j--;
+            traversalNode = traversalNode->next;
         }
 
-        // Insert temp into its correct position.
+        // Shift values forward to make room for the element being inserted.
+        while (traversalNode != currentNode)
+        {
+            // Preserve the value currently stored in the node.
+            T displace = traversalNode->data;
+
+            // Place the value being inserted into the current node.
+            traversalNode->data = temp;
+
+            // Carry the displaced value forward to the next node.
+            temp = displace;
+
+            // Advance to the next node.
+            traversalNode = traversalNode->next;
+        }
+
+        // Handle the final node in the shifting process.
         currentNode->data = temp;
     }
 }
 
 template <typename T>
-void QuickSort(size_t low, size_t high)
+inline void Collection<T>::QuickSort(Node* low, Node* high)
 {
-    // Base case: if there is one or zero elements,
-    // the portion of the array is already sorted.
-    if (low >= high)
+    // Base case: Stop if the section is empty, invalid, or contains only one node.
+    if (low == nullptr || high == nullptr || low == high)
     {
         return;
     }
 
-    // Choose the last element as the pivot.
-    T pivot = array[high];
+    // Choose the last element in the current section as the pivot.
+    T pivot = high->data;
 
-    // i keeps track of the position where the next
-    // element smaller than the pivot should be placed.
-    size_t i = low - 1;
+    // i tracks the boundary of the section containing values smaller than the pivot.
+    // nullptr represents the position immediately before the first node.
+    Node* i = nullptr;
 
-    // Check each element before the pivot.
-    for (size_t j = low; j < high; j++)
+    // j traverses the current section, examining each node before the pivot.
+    Node* j = low;
+
+    // Traverse the section until reaching the pivot node.
+    while (j != high)
     {
-        // If the current element is smaller than the pivot,
-        // move it into the section containing smaller elements.
-        if (array[j] < pivot)
+        // Check whether the current value belongs in the smaller-elements section.
+        if (j->data < pivot)
         {
-            i++;
-            swap(array[i], array[j]);
+            // Advance the smaller-elements boundary.
+            // If this is the first smaller element, initialize i at low.
+            i = i == nullptr ? low : i->next;
+
+            // Move the smaller value into the section before the pivot.
+            std::swap(i->data, j->data);
         }
+
+        // Advance to the next node regardless of whether a swap occurred.
+        j = j->next;
+    }
+    
+    // Store the node where the pivot will be placed in its final position.
+    Node* pivotNode = nullptr;
+
+    // If no elements were smaller than the pivot, place it at the beginning.
+    if (i == nullptr)
+    {
+        pivotNode = low;
+
+        // Exchange the first node's value with the pivot's value.
+        std::swap(pivotNode->data, high->data);
+    }
+    else
+    {
+        // Otherwise, place the pivot immediately after the smaller-elements section.
+        pivotNode = i->next;
+
+        // Exchange the destination node's value with the pivot's value.
+        std::swap(pivotNode->data, high->data);
     }
 
-    // Place the pivot between the smaller and larger elements.
-    swap(array[i + 1], array[high]);
-
-    // The pivot is now in its final sorted position.
-    size_t pivotIndex = i + 1;
-
-    // Recursively sort the elements to the left of the pivot.
-    QuickSort(array, low, pivotIndex - 1);
-
-    // Recursively sort the elements to the right of the pivot.
-    QuickSort(array, pivotIndex + 1, high);
+    // Recursively sort the section containing values smaller than the pivot.
+    // The pivot is excluded because it is already in its final position.
+    if (i != nullptr)
+    {
+        QuickSort(low, i);
+    }
+    
+    // Recursively sort the section containing values greater than
+    // or equal to the pivot.
+    // Start immediately after the pivot to exclude it from recursion.
+    if (pivotNode != high)
+    {
+        QuickSort(pivotNode->next, high);
+    }
 }
 
 template <typename T>
-void MergeSort()
+inline void Collection<T>::MergeSort(Node*& start)
 {
-    // Base case:
-    // An array with 0 or 1 elements is already sorted.
-    if (array.size() <= 1)
+    // Base case: A sublist containing zero or one node is already sorted.
+    if (start == nullptr || start->next == nullptr)
     {
         return;
     }
+    
+    // Initialize two pointers to locate the midpoint of the sublist.
+    // The slow pointer advances one node at a time.
+    Node* slowNode = start;
 
-    // Temporary vectors used to store the two halves.
-    vector<T> left, right;
-
-    // Copy the first half of the array into left.
-    for (size_t i = 0; i < array.size() / 2; i++)
+    // The fast pointer advances two nodes at a time.
+    Node* fastNode = start->next;
+    
+    // Continue traversing while the fast pointer and its next node exist.
+    while (fastNode != nullptr && fastNode->next != nullptr)
     {
-        left.push_back(array[i]);
+        // Advance the slow pointer by one node.
+        slowNode = slowNode->next;
+        
+        // Temporarily store the node immediately after fastNode.
+        Node* fasterNode = fastNode->next;
+
+        // Advance the fast pointer by two nodes.
+        fastNode = fasterNode->next;
+    }
+    
+    // Preserve the beginning of the right sublist.
+    Node* rightHead = slowNode->next;
+
+    // Disconnect the two sublists by terminating the left sublist.
+    slowNode->next = nullptr;
+
+    // Recursively sort the left sublist.
+    // The reference allows start to be updated to its new head.
+    MergeSort(start);
+
+    // Recursively sort the right sublist.
+    // The reference allows rightHead to be updated to its new head.
+    MergeSort(rightHead);
+
+    // Merge the two sorted sublists and update start
+    // to point to the beginning of the newly merged list.
+    start = Merge(start, rightHead);
+}
+
+template <typename T>
+inline typename Collection<T>::Node* Collection<T>::Merge(Node* left, Node* right)
+{
+    // Base case: If the left sublist is empty, return the right sublist.
+    if (left == nullptr)
+    {
+        return right;
+    }
+    
+    // Base case: If the right sublist is empty, return the left sublist.
+    if (right == nullptr)
+    {
+        return left;
     }
 
-    // Copy the second half of the array into right.
-    for (size_t i = array.size() / 2; i < array.size(); i++)
+    // Pointers used to track the beginning and end of the merged list.
+    Node* mergedHead = nullptr;
+    Node* mergedTail = nullptr;
+
+    // Select the smaller of the first nodes from the two sublists.
+    // If values are equal, select from the left to preserve stable sorting.
+    if (right->data < left->data)
     {
-        right.push_back(array[i]);
+        mergedHead = right;
+    }
+    else
+    {
+        mergedHead = left;
+    }
+    
+    // Initialize the tail to the first node of the merged list.
+    mergedTail = mergedHead;
+    
+    // Advance the sublist pointer from which the first node was selected.
+    // This prevents selecting the same node again.
+    if (mergedHead == left)
+    {
+        left = left->next;
+    }
+    else
+    {
+        right = right->next;
     }
 
-    // Recursively sort both halves.
-    MergeSort(left);
-    MergeSort(right);
-
-    // Merge the two sorted halves back into the original array.
-
-    // Index for the left vector.
-    size_t leftIndex = 0;
-
-    // Index for the right vector.
-    size_t rightIndex = 0;
-
-    // Index for the original array.
-    size_t arrayIndex = 0;
-
-    // Continue while both halves still contain elements.
-    while (leftIndex < left.size() && rightIndex < right.size())
+    // Continue merging while both sublists still contain nodes.
+    while (left != nullptr && right != nullptr)
     {
-        // Take the smaller element from the two halves.
-        // <= handles equal elements by taking from the left.
-        if (left[leftIndex] <= right[rightIndex])
+        // Select the smaller node and connect it to the end of the merged list.
+        // When values are equal, select from the left sublist.
+        mergedTail->next = left->data <= right->data ? left : right;
+
+        // Advance the pointer belonging to the selected sublist.
+        if (mergedTail->next == left)
         {
-            array[arrayIndex] = left[leftIndex];
-            leftIndex++;
+            left = left->next;
         }
         else
         {
-            array[arrayIndex] = right[rightIndex];
-            rightIndex++;
+            right = right->next;
         }
 
-        // Move to the next position in the original array.
-        arrayIndex++;
+        // Advance the tail to the newly appended node.
+        mergedTail = mergedTail->next;
     }
+    
+    // Attach the remaining nodes from whichever sublist is not empty.
+    // The remaining sublist is already sorted, so no further comparisons are needed.
+    mergedTail->next = left != nullptr ? left : right;
 
-    // If elements remain in left, copy them into the array.
-    while (leftIndex < left.size())
-    {
-        array[arrayIndex] = left[leftIndex];
-        arrayIndex++;
-        leftIndex++;
-    }
-
-    // If elements remain in right, copy them into the array.
-    while (rightIndex < right.size())
-    {
-        array[arrayIndex] = right[rightIndex];
-        arrayIndex++;
-        rightIndex++;
-    }
-
-    // Free the vectors to preserve space in memory
-    free(left);
-    free(right);
+    // Return the beginning of the fully merged list.
+    return mergedHead;
 }
 
 // -----------------------------------------------------------------------
