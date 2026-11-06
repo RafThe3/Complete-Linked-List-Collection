@@ -147,6 +147,8 @@ class Collection
     Node* Merge(Node* left, Node* right);
 };
 
+#pragma region Constructor / Destructor
+
 // ------------------------Constructor / Destructor---------------------------
 
 // Default construction creates an empty collection.
@@ -159,6 +161,10 @@ inline Collection<T>::~Collection()
 {
     clear();
 }
+
+#pragma endregion
+
+#pragma region Copy Constructor / Copy Assignment Operator
 
 // --------------Copy Constructor / Copy Assignment Operator--------------------
 
@@ -220,6 +226,10 @@ inline Collection<T>& Collection<T>::operator=(const Collection<T>& source)
     return *this;
 }
 
+#pragma endregion
+
+#pragma region Move Constructor / Move Assignment Operator
+
 // --------------Move Constructor / Move Assignment Operator--------------------
 
 // Move construction transfers the source nodes and leaves the source empty.
@@ -277,6 +287,10 @@ inline Collection<T>& Collection<T>::operator=(Collection<T>&& source) noexcept
     // Return the destination collection to support assignment chaining.
     return *this;
 }
+
+#pragma endregion
+
+#pragma region Insertion
 
 // -------------------------------Insertion------------------------------------
 
@@ -388,6 +402,10 @@ inline bool Collection<T>::insertSorted(const T& data)
 
     return true;
 }
+
+#pragma endregion
+
+#pragma region Deletion
 
 // --------------------------------Deletion-------------------------------------
 
@@ -596,6 +614,10 @@ inline bool Collection<T>::clear()
     return getSize() < originalSize;
 }
 
+#pragma endregion
+
+#pragma region Replacement
+
 // -----------------------------Replacement------------------------------------
 
 // Replace the first occurrence of oldVal while checking neighboring values when the list is marked sorted.
@@ -663,6 +685,10 @@ inline bool Collection<T>::replaceAt(const T& data, std::size_t index)
     return true;
 }
 
+#pragma endregion
+
+#pragma region Swapping
+
 // -------------------------------Swapping--------------------------------------
 
 // Swap the stored values at the first matching positions without relinking nodes.
@@ -717,6 +743,10 @@ inline bool Collection<T>::swapAt(const T& data, std::size_t index)
         return true;
     }
 }
+
+#pragma endregion
+
+#pragma region Searching
 
 // -------------------------------Searching------------------------------------
 
@@ -778,6 +808,10 @@ inline std::size_t Collection<T>::search(const T& data) const
     // Return -1 if data is not found
     return NOT_FOUND;
 }
+
+#pragma endregion
+
+#pragma region Sorting
 
 // --------------------------------Sorting--------------------------------------
 
@@ -1053,6 +1087,10 @@ inline typename Collection<T>::Node* Collection<T>::Merge(Node* left, Node* righ
     return mergedHead;
 }
 
+#pragma endregion
+
+#pragma region Saving and Loading
+
 // -------------------------Saving and Loading----------------------------------
 
 // Save each node to a separate line, quoting string values so whitespace can be preserved.
@@ -1195,6 +1233,10 @@ inline bool Collection<T>::load(const std::string& filename)
     return true;
 }
 
+#pragma endregion
+
+#pragma region Global
+
 // ---------------------------------Global---------------------------------------
 
 // Return the first value without removing it.
@@ -1262,6 +1304,10 @@ inline std::string Collection<T>::toString() const
 
     return ss.str();
 }
+
+#pragma endregion
+
+#pragma region Private Traversal Helpers
 
 // ---------------------------Private Traversal Helpers-------------------------
 
@@ -1344,3 +1390,5 @@ inline const typename Collection<T>::Node* Collection<T>::traverseToIndex(std::s
 
     return currentNode;
 }
+
+#pragma endregion
