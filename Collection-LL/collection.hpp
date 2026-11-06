@@ -1,14 +1,14 @@
 #pragma once // Prevents this header from being included more than once.
-#include <sstream> // Provides stringstream for building a string representation.
+#include <sstream> // Provides std::stringstream for building a std::string representation.
 #include <string> // Provides std::string.
 #include <cstddef> // Provides std::size_t.
 #include <limits> // Provides numeric_limits for the NOT_FOUND sentinel.
 #include <utility> // Provides std::swap().
+#include <fstream>
+#include <iomanip>
+#include <type_traits>
+#include <stdexcept>
 #include "exceptions.hpp" // Defines IndexOutOfBounds.
-
-using std::size_t;
-using std::stringstream;
-using std::string;
 
 // A singly linked-list collection that stores values of type T.
 template <typename T>
@@ -28,45 +28,50 @@ class Collection
     Collection(Collection<T>&& source) noexcept;
     Collection<T>& operator=(Collection<T>&& source) noexcept;
 
-    // List
-
     // Insertion
-    void insert(const T& data, size_t index);
-    bool insertSorted(const T& data);
-    void push_back(const T& data);
     void push_front(const T& data);
+    void push_back(const T& data);
+    void insert(const T& data, std::size_t index);
+    bool insertSorted(const T& data);
 
     // Deletion
-    void removeValue(const T& data);
-    void removeAt(size_t index);
+    void remove(const T& data);
+    void removeAt(std::size_t index);
     void pop_front(T& out);
-    void pop_back(T& data);
-    void clear();
+    void pop_back(T& out);
 
     // Replacement
+    bool replace(const T& newVal, const T& oldVal);
+    bool replaceAt(const T& data, std::size_t index);
 
     // Swapping
+    bool swap(const T& newVal, const T& oldVal);
+    bool swapAt(const T& data, std::size_t index);
 
     // Searching
     bool contains(const T& data) const;
-    size_t search(const T& data) const;
-    T at(size_t index) const;
-
-    T front() const;
-    T back() const;
+    const T& at(std::size_t index) const;
+    std::size_t search(const T& data) const;
 
     // Sorting
     void sort();
 
     // Global
+    const T& front() const;
+    const T& back() const;
+    void clear();
     bool isEmpty() const;
-    size_t getSize() const;
-    string toString() const;
+    std::size_t getSize() const;
+    std::string toString() const;
+
+    // Saving and Loading
+    bool save(const std::string& filename) const;
+    bool load(const std::string& filename);
 
     private:
 
     // Value returned by search() when no matching element is found.
-    static constexpr size_t NOT_FOUND = std::numeric_limits<size_t>::max();
+    static constexpr std::size_t NOT_FOUND = std::numeric_limits<std::size_t>::max();
 
     // Each node stores one value and a pointer to the next node.
     struct Node
@@ -79,24 +84,26 @@ class Collection
     };
 
     Node* head; // First node; nullptr means the list is empty.
-    size_t size; // Number of nodes currently in the collection.
+    std::size_t size; // Number of nodes currently in the collection.
+    bool isSorted = true; // Keeps track if the collection is sorted or not.
 
     // Non-const versions: Allow modification of the nodes.
     Node* traverseToTail();
-    Node* traverseToIndex(size_t index);
+    Node* traverseToIndex(std::size_t index);
 
     // Const versions: Prevent modification of the nodes.
     const Node* traverseToTail() const;
-    const Node* traverseToIndex(size_t index) const;
+    const Node* traverseToIndex(std::size_t index) const;
 
     // Sorting
     void InsertionSort();
     void QuickSort(Node* low, Node* high);
-    void MergeSort(Node* &start);
+    void MergeSort(Node*& start);
     Node* Merge(Node* left, Node* right);
 };
 
 // ------------------------Constructor / Destructor---------------------------
+
 
 // Default construction creates an empty collection.
 template <typename T>
@@ -109,9 +116,9 @@ inline Collection<T>::~Collection()
     clear();
 }
 
-// -----------------------------------------------------------------------------
 
 // --------------Copy Constructor / Copy Assignment Operator--------------------
+
 
 // Deep-copy constructor: create independent nodes containing the source values.
 template <typename T>
@@ -168,9 +175,9 @@ inline Collection<T>& Collection<T>::operator=(const Collection<T>& source)
     return *this;
 }
 
-// -----------------------------------------------------------------------
 
 // --------------Move Constructor / Move Assignment Operator--------------------
+
 
 template <typename T>
 inline Collection<T>::Collection(Collection<T>&& source) noexcept : head(source.head), size(source.size)
@@ -218,13 +225,26 @@ inline Collection<T>& Collection<T>::operator=(Collection<T>&& source) noexcept
     return *this;
 }
 
-// -----------------------------------------------------------------------------
 
-// ---------------------------------List----------------------------------
+// -------------------------------Insertion------------------------------------
+
+// Add a value at the beginning.
+template <typename T>
+inline void Collection<T>::push_front(const T& data)
+{
+    insert(data, 0);
+}
+
+// Add a value at the end by inserting at the current size.
+template <typename T>
+inline void Collection<T>::push_back(const T& data)
+{
+    insert(data, size);
+}
 
 // Insert data at index; index == size means append to the end.
 template <typename T>
-inline void Collection<T>::insert(const T& data, size_t index)
+inline void Collection<T>::insert(const T& data, std::size_t index)
 {
     // Validate that index is non-negative and less than or equal to size
     if (index > size)
@@ -258,56 +278,56 @@ inline void Collection<T>::insert(const T& data, size_t index)
     size++;
 }
 
-// Add a value at the end by inserting at the current size.
+// Insert a value into its correct position in an already-sorted collection.
 template <typename T>
-inline void Collection<T>::push_back(const T& data)
+inline bool Collection<T>::insertSorted(const T& data)
 {
-    insert(data, size);
-}
-
-// Remove the last node and copy its value into out.
-template <typename T>
-inline void Collection<T>::pop_back(T& out)
-{
-    // Check if list is not empty
-    if (isEmpty())
+    // Insertion is only allowed when the collection is already sorted.
+    if (!isSorted)
     {
-        throw EmptyList();
+        return false;
     }
 
-    // currentNode moves through the list; prevNode follows one node behind.
+    // Pointers used to locate the insertion position.
     Node* currentNode = head;
     Node* prevNode = nullptr;
 
-    // Special case: a one-node list has no predecessor.
-    if (currentNode->next == nullptr)
+    // Traverse while existing values are less than or equal to data.
+    // This places duplicate values after existing occurrences.
+    while (currentNode != nullptr && currentNode->data <= data)
     {
-        out = currentNode->data;
-        head = nullptr;
-        delete currentNode;
+        prevNode = currentNode;
+        currentNode = currentNode->next;
+    }
+
+    // Create a new node and connect it to the node currently at the insertion position.
+    Node* newNode = new Node(data);
+    newNode->next = currentNode;
+
+    // If no previous node exists, the new node becomes the head.
+    if (prevNode == nullptr)
+    {
+        head = newNode;
     }
     else
     {
-        // Advance until currentNode is the tail and prevNode is its predecessor.
-        for (size_t i = 0; i < size - 1; i++)
-        {
-            prevNode = currentNode;
-            currentNode = currentNode->next;
-        }
-
-        out = currentNode->data; // Preserve the value before deleting the node.
-        prevNode->next = nullptr; // The predecessor becomes the new tail.
-        delete currentNode; // Release the removed tail node.
+        // Otherwise, connect the previous node to the new node.
+        prevNode->next = newNode;
     }
 
-    size--;
+    // Update the collection's size after successful insertion.
+    size++;
+
+    return true;
 }
+
+// --------------------------------Deletion-------------------------------------
 
 // Find the value's index and remove it if it exists.
 template <typename T>
-inline void Collection<T>::removeValue(const T& data)
+inline void Collection<T>::remove(const T& data)
 {
-    size_t index = search(data);
+    std::size_t index = search(data);
 
     if (index != NOT_FOUND)
     {
@@ -317,7 +337,7 @@ inline void Collection<T>::removeValue(const T& data)
 
 // Remove the node at a zero-based index.
 template <typename T>
-inline void Collection<T>::removeAt(size_t index)
+inline void Collection<T>::removeAt(std::size_t index)
 {
     // Validate that index is non-negative and less than size
     if (index >= size)
@@ -352,16 +372,216 @@ inline void Collection<T>::removeAt(size_t index)
     size--;
 }
 
+// Copy the first value into out, then remove the first node.
+template <typename T>
+inline void Collection<T>::pop_front(T& out)
+{
+    if (head == nullptr)
+    {
+        throw EmptyList();
+    }
+
+    // Return data at index
+    out = head->data;
+    removeAt(0);
+}
+
+// Remove the last node and copy its value into out.
+template <typename T>
+inline void Collection<T>::pop_back(T& out)
+{
+    // Check if list is not empty
+    if (isEmpty())
+    {
+        throw EmptyList();
+    }
+
+    // currentNode moves through the list; prevNode follows one node behind.
+    Node* currentNode = head;
+    Node* prevNode = nullptr;
+
+    // Special case: a one-node list has no predecessor.
+    if (currentNode->next == nullptr)
+    {
+        out = currentNode->data;
+        head = nullptr;
+        delete currentNode;
+    }
+    else
+    {
+        // Advance until currentNode is the tail and prevNode is its predecessor.
+        for (std::size_t i = 0; i < size - 1; i++)
+        {
+            prevNode = currentNode;
+            currentNode = currentNode->next;
+        }
+
+        out = currentNode->data; // Preserve the value before deleting the node.
+        prevNode->next = nullptr; // The predecessor becomes the new tail.
+        delete currentNode; // Release the removed tail node.
+    }
+
+    size--;
+}
+
+
+// -----------------------------Replacement------------------------------------
+
+template <typename T>
+inline bool Collection<T>::replace(const T& newVal, const T& oldVal)
+{
+    std::size_t oldIndex = search(oldVal);
+    bool oldValExists = oldIndex != NOT_FOUND;
+
+    if (!oldValExists)
+    {
+        return false;
+    }
+
+    Node* currentNode = head;
+    Node* prevNode = nullptr;
+
+    for (std::size_t i = 0; i < oldIndex; i++)
+    {
+        prevNode = currentNode;
+        currentNode = currentNode->next;
+    }
+
+    if (isSorted)
+    {
+        bool orderedBefore = oldIndex == 0 || prevNode->data <= newVal;
+
+        Node* nextNode = currentNode->next;
+        bool orderedAfter = nextNode == nullptr || newVal <= nextNode->data;
+
+        isSorted = orderedBefore && orderedAfter;
+    }
+
+    currentNode->data = newVal;
+    return true;
+}
+
+template <typename T>
+inline bool Collection<T>::replaceAt(const T& data, std::size_t index)
+{
+    if (index >= size)
+    {
+        return false;
+    }
+
+    Node* currentNode = traverseToIndex(index);
+    Node* prevNode = nullptr;
+    
+    prevNode = index > 0 ? traverseToIndex(index - 1) : nullptr;
+
+    if (isSorted)
+    {
+        bool orderedBefore = index == 0 || prevNode->data <= data;
+
+        Node* nextNode = currentNode->next;
+        bool orderedAfter = nextNode == nullptr || data <= nextNode->data;
+
+        isSorted = orderedBefore && orderedAfter;
+    }
+
+    currentNode->data = data;
+    return true;
+}
+
+// -------------------------------Swapping--------------------------------------
+
+template <typename T>
+inline bool Collection<T>::swap(const T& newVal, const T& oldVal)
+{
+    std::size_t newIndex = search(newVal);
+    std::size_t oldIndex = search(oldVal);
+
+    if (newIndex == NOT_FOUND || oldIndex == NOT_FOUND)
+    {
+        return false;
+    }
+
+    if (newIndex == oldIndex)
+    {
+        return true;
+    }
+    else
+    {
+        Node* newIndexNode = traverseToIndex(newIndex);
+        Node* oldIndexNode = traverseToIndex(oldIndex);
+
+        std::swap(newIndexNode->data, oldIndexNode->data);
+        isSorted = false;
+        return true;
+    }
+}
+
+template <typename T>
+inline bool Collection<T>::swapAt(const T& data, std::size_t index)
+{
+    std::size_t foundIndex = search(data);
+
+    if (foundIndex == NOT_FOUND || index >= size)
+    {
+        return false;
+    }
+
+    if (foundIndex == index)
+    {
+        return true;
+    }
+    else
+    {
+        Node* foundNode = traverseToIndex(foundIndex);
+        Node* indexNode = traverseToIndex(index);
+
+        std::swap(foundNode->data, indexNode->data);
+        isSorted = false;
+        return true;
+    }
+}
+
+
+// -------------------------------Searching------------------------------------
+
+// Returns either true or false based if the data exists in the collection.
+template <typename T>
+inline bool Collection<T>::contains(const T& data) const
+{
+    // Search for the data in the collection.
+    std::size_t index = search(data);
+
+    // Returns whether it exists.
+    return index != NOT_FOUND;
+}
+
+// Return the value at index after validating the requested position.
+template <typename T>
+inline const T& Collection<T>::at(std::size_t index) const
+{
+    // Validate that index is non-negative and less than size
+    if (index >= size)
+    {
+        throw IndexOutOfBounds();
+    }
+
+    // Traversal node
+    const Node* currentNode = traverseToIndex(index);
+
+    // Return data at index
+    return currentNode->data;
+}
+
 // Return the first matching index, or NOT_FOUND if there is no match.
 template <typename T>
-inline size_t Collection<T>::search(const T& data) const
+inline std::size_t Collection<T>::search(const T& data) const
 {
     // Traversal node
     // Begin at the head and inspect nodes one by one.
     const Node* currentNode = head;
 
     // Index of the node currently being inspected.
-    size_t index = 0;
+    std::size_t index = 0;
 
     // While currentNode exists
     while (currentNode != nullptr)
@@ -383,69 +603,9 @@ inline size_t Collection<T>::search(const T& data) const
     return NOT_FOUND;
 }
 
-// Return the value at index after validating the requested position.
-template <typename T>
-inline T Collection<T>::at(size_t index) const
-{
-    // Validate that index is non-negative and less than size
-    if (index >= size)
-    {
-        throw IndexOutOfBounds();
-    }
 
-    // Traversal node
-    const Node* currentNode = traverseToIndex(index);
+// --------------------------------Sorting--------------------------------------
 
-    // Return data at index
-    return currentNode->data;
-}
-
-// -----------------------------------------------------------------------
-
-// Add a value at the beginning.
-template <typename T>
-inline void Collection<T>::push_front(const T& data)
-{
-    insert(data, 0);
-}
-
-// Copy the first value into out, then remove the first node.
-template <typename T>
-inline void Collection<T>::pop_front(T& out)
-{
-    if (head == nullptr)
-    {
-        throw EmptyList();
-    }
-
-    // Return data at index
-    out = head->data;
-    removeAt(0);
-}
-
-// Return the first value without removing it.
-template <typename T>
-inline T Collection<T>::front() const
-{
-    if (head == nullptr)
-    {
-        throw EmptyList();
-    }
-
-    return head->data;
-}
-
-// Find and return the final value in the list.
-template <typename T>
-inline T Collection<T>::back() const
-{
-    const Node* currentNode = traverseToTail();
-    return currentNode->data;
-}
-
-// -----------------------------------------------------------------------
-
-// -------------------------------Sorting---------------------------------
 
 // Sorts the collection by choosing a sorting algorithm based on collection size.
 template <typename T>
@@ -473,7 +633,7 @@ inline void Collection<T>::InsertionSort()
     Node* currentNode = head;
 
     // Begin at index 1 because the first element is already considered sorted.
-    for (size_t i = 1; i < size; i++)
+    for (std::size_t i = 1; i < size; i++)
     {
         // Advance to the next element in the unsorted portion.
         currentNode = currentNode->next;
@@ -706,95 +866,27 @@ inline typename Collection<T>::Node* Collection<T>::Merge(Node* left, Node* righ
     return mergedHead;
 }
 
-// -----------------------------------------------------------------------
 
-// -------------------------------Global----------------------------------
+// ---------------------------------Global---------------------------------------
 
-// Locate the final node; an empty collection has no tail to return.
+// Return the first value without removing it.
 template <typename T>
-inline typename Collection<T>::Node* Collection<T>::traverseToTail()
+inline const T& Collection<T>::front() const
 {
-    if (isEmpty())
+    if (head == nullptr)
     {
         throw EmptyList();
     }
 
-    // Starting at the head, follow size - 1 links to reach the tail.
-    Node* currentNode = head;
-
-    for (size_t i = 0; i < size - 1; i++)
-    {
-        currentNode = currentNode->next;
-    }
-
-    return currentNode;
+    return head->data;
 }
 
-// Locate the final node; an empty collection has no tail to return.
+// Find and return the final value in the list.
 template <typename T>
-inline const typename Collection<T>::Node* Collection<T>::traverseToTail() const
+inline const T& Collection<T>::back() const
 {
-    if (isEmpty())
-    {
-        throw EmptyList();
-    }
-
-    // Starting at the head, follow size - 1 links to reach the tail.
-    const Node* currentNode = head;
-
-    for (size_t i = 0; i < size - 1; i++)
-    {
-        currentNode = currentNode->next;
-    }
-
-    return currentNode;
-}
-
-// Locate the node at index; reject an index outside the valid range.
-template <typename T>
-inline typename Collection<T>::Node* Collection<T>::traverseToIndex(size_t index)
-{
-    if (index >= size)
-    {
-        throw IndexOutOfBounds();
-    }
-
-    Node* currentNode = head;
-
-    // Follow next pointers index times to reach the requested list node.
-    for (size_t i = 0; i < index; i++)
-    {
-        currentNode = currentNode->next;
-    }
-
-    return currentNode;
-}
-
-// Locate the node at index; reject an index outside the valid range.
-template <typename T>
-inline const typename Collection<T>::Node* Collection<T>::traverseToIndex(size_t index) const
-{
-    if (index >= size)
-    {
-        throw IndexOutOfBounds();
-    }
-
-    const Node* currentNode = head;
-
-    // Follow next pointers index times to reach the requested list node.
-    for (size_t i = 0; i < index; i++)
-    {
-        currentNode = currentNode->next;
-    }
-
-    return currentNode;
-}
-
-// Report whether the collection contains zero nodes.
-template <typename T>
-inline bool Collection<T>::isEmpty() const
-{
-    return size == 0;
+    const Node* currentNode = traverseToTail();
+    return currentNode->data;
 }
 
 // Delete all nodes and reset the collection to an empty state.
@@ -817,18 +909,25 @@ inline void Collection<T>::clear()
     size = 0;
 }
 
+// Report whether the collection contains zero nodes.
+template <typename T>
+inline bool Collection<T>::isEmpty() const
+{
+    return size == 0;
+}
+
 // Return the stored node count.
 template <typename T>
-inline size_t Collection<T>::getSize() const
+inline std::size_t Collection<T>::getSize() const
 {
     return size;
 }
 
 // Convert the list into text, placing arrows between adjacent values.
 template <typename T>
-inline string Collection<T>::toString() const
+inline std::string Collection<T>::toString() const
 {
-    stringstream ss; // Accumulate the output efficiently.
+    std::stringstream ss; // Accumulate the output efficiently.
 
     const Node* currentNode = head; // Traverse from the first node.
 
@@ -848,4 +947,193 @@ inline string Collection<T>::toString() const
     return ss.str();
 }
 
-// -----------------------------------------------------------------------
+
+// ---------------------------Private Traversal Helpers-------------------------
+
+
+// Locate the final node; an empty collection has no tail to return.
+template <typename T>
+inline typename Collection<T>::Node* Collection<T>::traverseToTail()
+{
+    if (isEmpty())
+    {
+        throw EmptyList();
+    }
+
+    // Starting at the head, follow size - 1 links to reach the tail.
+    Node* currentNode = head;
+
+    for (std::size_t i = 0; i < size - 1; i++)
+    {
+        currentNode = currentNode->next;
+    }
+
+    return currentNode;
+}
+
+// Locate the final node; an empty collection has no tail to return.
+template <typename T>
+inline const typename Collection<T>::Node* Collection<T>::traverseToTail() const
+{
+    if (isEmpty())
+    {
+        throw EmptyList();
+    }
+
+    // Starting at the head, follow size - 1 links to reach the tail.
+    const Node* currentNode = head;
+
+    for (std::size_t i = 0; i < size - 1; i++)
+    {
+        currentNode = currentNode->next;
+    }
+
+    return currentNode;
+}
+
+// Locate the node at index; reject an index outside the valid range.
+template <typename T>
+inline typename Collection<T>::Node* Collection<T>::traverseToIndex(std::size_t index)
+{
+    if (index >= size)
+    {
+        throw IndexOutOfBounds();
+    }
+
+    Node* currentNode = head;
+
+    // Follow next pointers index times to reach the requested list node.
+    for (std::size_t i = 0; i < index; i++)
+    {
+        currentNode = currentNode->next;
+    }
+
+    return currentNode;
+}
+
+// Locate the node at index; reject an index outside the valid range.
+template <typename T>
+inline const typename Collection<T>::Node* Collection<T>::traverseToIndex(std::size_t index) const
+{
+    if (index >= size)
+    {
+        throw IndexOutOfBounds();
+    }
+
+    const Node* currentNode = head;
+
+    // Follow next pointers index times to reach the requested list node.
+    for (std::size_t i = 0; i < index; i++)
+    {
+        currentNode = currentNode->next;
+    }
+
+    return currentNode;
+}
+
+
+// -------------------------Saving and Loading----------------------------------
+
+template <typename T>
+inline bool Collection<T>::save(const std::string& filename) const
+{
+    std::ofstream file(filename);
+
+    if (!file)
+    {
+        return false;
+    }
+
+    // max_digits10 preserves enough significant digits to reload floating-point values accurately.
+    if constexpr (std::is_floating_point_v<T>)
+    {
+        file << std::setprecision(std::numeric_limits<T>::max_digits10);
+    }
+    
+    const Node* currentNode = head;
+    
+    while (currentNode != nullptr)
+    {
+        if constexpr (std::is_same_v(T, std::string))
+        {
+            file << std::quoted(currentNode->data) << '\n';
+        }
+        else
+        {
+            file << currentNode->data << '\n';
+        }
+        currentNode = currentNode->next;
+    }
+
+    file.close();
+
+    if (!file)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+template <typename T>
+inline bool Collection<T>::load(const std::string& filename)
+{
+    std::ifstream file(filename);
+
+    if (!file)
+    {
+        return false;
+    }
+    
+    Collection<T> temp;
+    T tempVal;
+    
+    // previous code...
+
+    while (true)
+    {
+        if (file.eof())
+        {
+            break;
+        }
+
+        file >> std::ws;
+
+        if (file.bad())
+        {
+            return false;
+        }
+
+        if (file.eof())
+        {
+            break;
+        }
+
+        if (!file)
+        {
+            return false;
+        }
+
+        if constexpr (std::is_same_v<T, std::string>)
+        {
+            if (!(file >> std::quoted(tempVal)))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (!(file >> tempVal))
+            {
+                return false;
+            }
+        }
+
+        if (std::find(loaded.begin(), loaded.end(), tempVal) == loaded.end())
+        {
+            // code...
+        }
+    }
+
+    // new code...
+}
