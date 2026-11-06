@@ -4,10 +4,10 @@
 #include <cstddef> // Provides std::size_t.
 #include <limits> // Provides numeric_limits for the NOT_FOUND sentinel.
 #include <utility> // Provides std::swap().
-#include <fstream>
-#include <iomanip>
-#include <type_traits>
-#include <stdexcept>
+#include <fstream> // Provides file input and output streams.
+#include <iomanip> // Provides std::quoted() and std::setprecision().
+#include <type_traits> // Provides compile-time type traits used to specialize file serialization.
+#include <stdexcept> // Provides standard exception type declarations.
 #include "exceptions.hpp" // Defines IndexOutOfBounds.
 
 // A singly linked-list collection that stores values of type T.
@@ -17,56 +17,92 @@ class Collection
     public:
 
     // Constructor / Destructor
+    // Creates an empty collection.
     Collection();
+    // Releases all nodes owned by the collection.
     ~Collection();
 
     // Copy constructor / copy assignment operator
+    // Creates an independent deep copy of another collection.
     Collection(const Collection<T>& source);
+    // Replaces this collection with a deep copy of another collection.
     Collection<T>& operator=(const Collection<T>& source);
 
     // Move constructor / move assignment operator
+    // Takes ownership of another collection's nodes.
     Collection(Collection<T>&& source) noexcept;
+    // Releases the current nodes and takes ownership of another collection's nodes.
     Collection<T>& operator=(Collection<T>&& source) noexcept;
 
     // Insertion
-    void push_front(const T& data);
-    void push_back(const T& data);
-    void insert(const T& data, std::size_t index);
+    // Inserts a value at the beginning; returns whether insertion succeeded.
+    bool push_front(const T& data);
+    // Inserts a value at the end; returns whether insertion succeeded.
+    bool push_back(const T& data);
+    // Inserts a value at an index from 0 through getSize(); returns false for an invalid index.
+    bool insert(const T& data, std::size_t index);
+    // Inserts a value in sorted position; returns false if the collection is not marked sorted.
     bool insertSorted(const T& data);
 
     // Deletion
-    void remove(const T& data);
-    void removeAt(std::size_t index);
-    void pop_front(T& out);
-    void pop_back(T& out);
+    // Removes the first occurrence of a value; returns false if it is not found.
+    bool remove(const T& data);
+    // Removes the value at an index; returns false if the index is out of range.
+    bool removeAt(std::size_t index);
+    // Removes the first value and stores it in out; returns false if the collection is empty.
+    bool pop_front(T& out);
+    // Removes the last value and stores it in out; returns false if the collection is empty.
+    bool pop_back(T& out);
+    // Removes the first value without returning it; returns false if the collection is empty.
+    bool pop_front();
+    // Removes the last value without returning it; returns false if the collection is empty.
+    bool pop_back();
+    // Removes every value; returns true only if the collection contained at least one value.
+    bool clear();
 
     // Replacement
+    // Replaces the first occurrence of oldVal with newVal; returns false if oldVal is absent.
     bool replace(const T& newVal, const T& oldVal);
+    // Replaces the value at index; returns false if the index is out of range.
     bool replaceAt(const T& data, std::size_t index);
 
     // Swapping
+    // Swaps the first occurrences of two values; returns false if either value is absent.
     bool swap(const T& newVal, const T& oldVal);
+    // Swaps the first occurrence of data with the value at index; returns false if either is invalid.
     bool swapAt(const T& data, std::size_t index);
 
     // Searching
+    // Reports whether at least one occurrence of data is in the collection.
     bool contains(const T& data) const;
+    // Returns a read-only reference to the value at index; throws if the index is invalid.
     const T& at(std::size_t index) const;
+    // Returns the first matching index, or NOT_FOUND when data is absent.
     std::size_t search(const T& data) const;
 
     // Sorting
-    void sort();
-
-    // Global
-    const T& front() const;
-    const T& back() const;
-    void clear();
-    bool isEmpty() const;
-    std::size_t getSize() const;
-    std::string toString() const;
+    // Sorts the collection when needed; returns true if a sorting operation was performed.
+    bool sort();
 
     // Saving and Loading
+    // Writes the collection to a file; returns false if opening, writing, or closing fails.
     bool save(const std::string& filename) const;
+    // Loads values from a file; returns false on file or parsing failure without replacing existing contents.
     bool load(const std::string& filename);
+
+    // Global
+    // Returns a read-only reference to the first value; throws if the collection is empty.
+    const T& front() const;
+    // Returns a read-only reference to the last value; throws if the collection is empty.
+    const T& back() const;
+    // Reports whether the collection contains no nodes.
+    bool isEmpty() const;
+    // Reports the collection's tracked sortedness state.
+    bool sorted() const;
+    // Returns the number of nodes in the collection.
+    std::size_t getSize() const;
+    // Returns the collection values as a string separated by arrows.
+    std::string toString() const;
 
     private:
 
@@ -85,29 +121,37 @@ class Collection
 
     Node* head; // First node; nullptr means the list is empty.
     std::size_t size; // Number of nodes currently in the collection.
+    // Tracks whether the collection is known to be in nondecreasing order.
     bool isSorted = true; // Keeps track if the collection is sorted or not.
 
     // Non-const versions: Allow modification of the nodes.
+    // Returns a modifiable pointer to the last node; throws if the collection is empty.
     Node* traverseToTail();
+    // Returns a modifiable pointer to the node at index; throws for an invalid index.
     Node* traverseToIndex(std::size_t index);
 
     // Const versions: Prevent modification of the nodes.
+    // Returns a read-only pointer to the last node; throws if the collection is empty.
     const Node* traverseToTail() const;
+    // Returns a read-only pointer to the node at index; throws for an invalid index.
     const Node* traverseToIndex(std::size_t index) const;
 
     // Sorting
+    // Sorts the node values using insertion sort.
     void InsertionSort();
+    // Sorts the inclusive node range from low through high using quicksort.
     void QuickSort(Node* low, Node* high);
+    // Recursively sorts the sublist beginning at start and updates its head pointer.
     void MergeSort(Node*& start);
+    // Merges two sorted sublists by relinking their existing nodes.
     Node* Merge(Node* left, Node* right);
 };
 
 // ------------------------Constructor / Destructor---------------------------
 
-
 // Default construction creates an empty collection.
 template <typename T>
-inline Collection<T>::Collection() : head(nullptr), size(0) {}
+inline Collection<T>::Collection() : head(nullptr), size(0), isSorted(true) {}
 
 // Destroying a collection must release all nodes it owns.
 template <typename T>
@@ -116,13 +160,11 @@ inline Collection<T>::~Collection()
     clear();
 }
 
-
 // --------------Copy Constructor / Copy Assignment Operator--------------------
-
 
 // Deep-copy constructor: create independent nodes containing the source values.
 template <typename T>
-inline Collection<T>::Collection(const Collection<T>& source) : head(nullptr), size(0)
+inline Collection<T>::Collection(const Collection<T>& source) : head(nullptr), size(0), isSorted(source.sorted())
 {
     // Use a pointer to walk through the original list.
     Node* sourceNode = source.head;
@@ -150,6 +192,7 @@ inline Collection<T>::Collection(const Collection<T>& source) : head(nullptr), s
     }
 }
 
+// Copy assignment uses copy-and-swap so the destination receives an independent copy.
 template <typename T>
 inline Collection<T>& Collection<T>::operator=(const Collection<T>& source)
 {
@@ -171,16 +214,17 @@ inline Collection<T>& Collection<T>::operator=(const Collection<T>& source)
     // Exchange the node counts to keep both collections consistent.
     std::swap(size, temp.size);
 
+    std::swap(isSorted, temp.isSorted);
+
     // Return the current collection to support assignment chaining.
     return *this;
 }
 
-
 // --------------Move Constructor / Move Assignment Operator--------------------
 
-
+// Move construction transfers the source nodes and leaves the source empty.
 template <typename T>
-inline Collection<T>::Collection(Collection<T>&& source) noexcept : head(source.head), size(source.size)
+inline Collection<T>::Collection(Collection<T>&& source) noexcept : head(source.head), size(source.size), isSorted(source.sorted())
 {
     // Transfer ownership of the source collection's nodes.
     // The destination now points to the source's original linked list.
@@ -193,8 +237,12 @@ inline Collection<T>::Collection(Collection<T>&& source) noexcept : head(source.
 
     // Reset the source size to represent an empty collection.
     source.size = 0;
+
+    // Reset the source's sorted-state flag to represent a sorted collection.
+    source.isSorted = true;
 }
 
+// Move assignment releases the current nodes before taking ownership of the source nodes.
 template <typename T>
 inline Collection<T>& Collection<T>::operator=(Collection<T>&& source) noexcept
 {
@@ -215,46 +263,52 @@ inline Collection<T>& Collection<T>::operator=(Collection<T>&& source) noexcept
     // Transfer the source's node count to the destination.
     size = source.size;
 
+    isSorted = source.sorted();
+
     // Reset the source head because ownership has been transferred.
     source.head = nullptr;
 
     // Reset the source size to represent an empty collection.
     source.size = 0;
 
+    // Reset the source's sorted-state flag to represent a sorted collection.
+    source.isSorted = true;
+
     // Return the destination collection to support assignment chaining.
     return *this;
 }
-
 
 // -------------------------------Insertion------------------------------------
 
 // Add a value at the beginning.
 template <typename T>
-inline void Collection<T>::push_front(const T& data)
+inline bool Collection<T>::push_front(const T& data)
 {
-    insert(data, 0);
+    return insert(data, 0);
 }
 
 // Add a value at the end by inserting at the current size.
 template <typename T>
-inline void Collection<T>::push_back(const T& data)
+inline bool Collection<T>::push_back(const T& data)
 {
-    insert(data, size);
+    return insert(data, size);
 }
 
 // Insert data at index; index == size means append to the end.
 template <typename T>
-inline void Collection<T>::insert(const T& data, std::size_t index)
+inline bool Collection<T>::insert(const T& data, std::size_t index)
 {
     // Validate that index is non-negative and less than or equal to size
     if (index > size)
     {
-        throw IndexOutOfBounds();
+        return false;
     }
 
     // Create new node and initialize data and next pointer
     // Allocate a new node to hold the inserted value.
+    // Keep track of the node immediately preceding the insertion point.
     Node* newNode = new Node(data);
+    Node* prevNode = nullptr;
 
     if (index == 0)
     {
@@ -271,11 +325,25 @@ inline void Collection<T>::insert(const T& data, std::size_t index)
 
         // Insert data
         newNode->next = currentNode->next; // Keep the rest of the list connected.
+        prevNode = currentNode;
         currentNode->next = newNode; // Insert the new node after currentNode.
+    }
+
+    // If the collection is marked sorted, check whether the changed value preserves local order.
+    if (sorted())
+    {
+        bool orderedBefore = index == 0 || prevNode->data <= data;
+
+        Node* nextNode = newNode->next;
+        bool orderedAfter = nextNode == nullptr || data <= nextNode->data;
+
+        isSorted = orderedBefore && orderedAfter;
     }
 
     // Increase list size
     size++;
+
+    return true;
 }
 
 // Insert a value into its correct position in an already-sorted collection.
@@ -283,7 +351,7 @@ template <typename T>
 inline bool Collection<T>::insertSorted(const T& data)
 {
     // Insertion is only allowed when the collection is already sorted.
-    if (!isSorted)
+    if (!sorted())
     {
         return false;
     }
@@ -324,26 +392,30 @@ inline bool Collection<T>::insertSorted(const T& data)
 // --------------------------------Deletion-------------------------------------
 
 // Find the value's index and remove it if it exists.
+// Remove the first matching value by locating its index and delegating to removeAt().
 template <typename T>
-inline void Collection<T>::remove(const T& data)
+inline bool Collection<T>::remove(const T& data)
 {
     std::size_t index = search(data);
 
     if (index != NOT_FOUND)
     {
         removeAt(index);
+        return true;
     }
+    
+    return false;
 }
 
 // Remove the node at a zero-based index.
+// Remove the node at index and update the tracked sortedness state when the size becomes small.
 template <typename T>
-inline void Collection<T>::removeAt(std::size_t index)
+inline bool Collection<T>::removeAt(std::size_t index)
 {
     // Validate that index is non-negative and less than size
     if (index >= size)
     {
-        // Throw exception
-        throw IndexOutOfBounds();
+        return false;
     }
 
     // Create a node for deleting
@@ -370,30 +442,39 @@ inline void Collection<T>::removeAt(std::size_t index)
 
     // Decrease list size
     size--;
+
+    // Consider a collection of 0 or 1 elements to be sorted.
+    if (size <= 1)
+    {
+        isSorted = true;
+    }
+
+    return true;
 }
 
 // Copy the first value into out, then remove the first node.
 template <typename T>
-inline void Collection<T>::pop_front(T& out)
+inline bool Collection<T>::pop_front(T& out)
 {
     if (head == nullptr)
     {
-        throw EmptyList();
+        return false;
     }
 
     // Return data at index
     out = head->data;
     removeAt(0);
+    return true;
 }
 
 // Remove the last node and copy its value into out.
 template <typename T>
-inline void Collection<T>::pop_back(T& out)
+inline bool Collection<T>::pop_back(T& out)
 {
     // Check if list is not empty
     if (isEmpty())
     {
-        throw EmptyList();
+        return false;
     }
 
     // currentNode moves through the list; prevNode follows one node behind.
@@ -422,11 +503,102 @@ inline void Collection<T>::pop_back(T& out)
     }
 
     size--;
+
+    // Consider a collection of 0 or 1 elements to be sorted.
+    if (size <= 1)
+    {
+        isSorted = true;
+    }
+
+    return true;
 }
 
+// Remove the first node.
+// Remove the head node without copying its value to an output parameter.
+template <typename T>
+inline bool Collection<T>::pop_front()
+{
+    if (head == nullptr)
+    {
+        return false;
+    }
+
+    removeAt(0);
+    return true;
+}
+
+// Remove the last node.
+// Remove the tail node without copying its value to an output parameter.
+template <typename T>
+inline bool Collection<T>::pop_back()
+{
+    // Check if list is not empty
+    if (isEmpty())
+    {
+        return false;
+    }
+
+    // currentNode moves through the list; prevNode follows one node behind.
+    Node* currentNode = head;
+    Node* prevNode = nullptr;
+
+    // Special case: a one-node list has no predecessor.
+    if (currentNode->next == nullptr)
+    {
+        head = nullptr;
+        delete currentNode;
+    }
+    else
+    {
+        // Advance until currentNode is the tail and prevNode is its predecessor.
+        for (std::size_t i = 0; i < size - 1; i++)
+        {
+            prevNode = currentNode;
+            currentNode = currentNode->next;
+        }
+
+        prevNode->next = nullptr; // The predecessor becomes the new tail.
+        delete currentNode; // Release the removed tail node.
+    }
+
+    size--;
+
+    // Consider a collection of 0 or 1 elements to be sorted.
+    if (size <= 1)
+    {
+        isSorted = true;
+    }
+
+    return true;
+}
+
+// Delete all nodes and reset the collection to an empty state.
+template <typename T>
+inline bool Collection<T>::clear()
+{
+    // Traversal node
+    Node* currentNode = head;
+    std::size_t originalSize = getSize();
+
+    // While currentNode exists, delete all data in list
+    while (currentNode != nullptr)
+    {
+        Node* temp = currentNode->next; // Save the next node before deleting this one.
+        delete currentNode; // Release the current node.
+        currentNode = temp; // Continue with the saved next node.
+    }
+
+    // Initialize head and size
+    head = nullptr;
+    size = 0;
+    isSorted = true;
+
+    return getSize() < originalSize;
+}
 
 // -----------------------------Replacement------------------------------------
 
+// Replace the first occurrence of oldVal while checking neighboring values when the list is marked sorted.
 template <typename T>
 inline bool Collection<T>::replace(const T& newVal, const T& oldVal)
 {
@@ -447,7 +619,8 @@ inline bool Collection<T>::replace(const T& newVal, const T& oldVal)
         currentNode = currentNode->next;
     }
 
-    if (isSorted)
+    // If the collection is marked sorted, check whether the changed value preserves local order.
+    if (sorted())
     {
         bool orderedBefore = oldIndex == 0 || prevNode->data <= newVal;
 
@@ -461,6 +634,7 @@ inline bool Collection<T>::replace(const T& newVal, const T& oldVal)
     return true;
 }
 
+// Replace the value at index while checking neighboring values when the list is marked sorted.
 template <typename T>
 inline bool Collection<T>::replaceAt(const T& data, std::size_t index)
 {
@@ -474,7 +648,8 @@ inline bool Collection<T>::replaceAt(const T& data, std::size_t index)
     
     prevNode = index > 0 ? traverseToIndex(index - 1) : nullptr;
 
-    if (isSorted)
+    // If the collection is marked sorted, check whether the changed value preserves local order.
+    if (sorted())
     {
         bool orderedBefore = index == 0 || prevNode->data <= data;
 
@@ -490,6 +665,7 @@ inline bool Collection<T>::replaceAt(const T& data, std::size_t index)
 
 // -------------------------------Swapping--------------------------------------
 
+// Swap the stored values at the first matching positions without relinking nodes.
 template <typename T>
 inline bool Collection<T>::swap(const T& newVal, const T& oldVal)
 {
@@ -516,6 +692,7 @@ inline bool Collection<T>::swap(const T& newVal, const T& oldVal)
     }
 }
 
+// Swap the first occurrence of data with the value stored at the requested index.
 template <typename T>
 inline bool Collection<T>::swapAt(const T& data, std::size_t index)
 {
@@ -540,7 +717,6 @@ inline bool Collection<T>::swapAt(const T& data, std::size_t index)
         return true;
     }
 }
-
 
 // -------------------------------Searching------------------------------------
 
@@ -603,17 +779,21 @@ inline std::size_t Collection<T>::search(const T& data) const
     return NOT_FOUND;
 }
 
-
 // --------------------------------Sorting--------------------------------------
-
 
 // Sorts the collection by choosing a sorting algorithm based on collection size.
 template <typename T>
-inline void Collection<T>::sort()
+inline bool Collection<T>::sort()
 {
     if (head == nullptr)
     {
-        return;
+        isSorted = true;
+        return false;
+    }
+
+    if (sorted())
+    {
+        return false;
     }
 
     if (size <= 50)
@@ -624,8 +804,12 @@ inline void Collection<T>::sort()
     {
         MergeSort(head);
     }
+
+    isSorted = true;
+    return true;
 }
 
+// Insertion sort rearranges values in place by growing a sorted prefix of the list.
 template <typename T>
 inline void Collection<T>::InsertionSort()
 {
@@ -672,6 +856,7 @@ inline void Collection<T>::InsertionSort()
     }
 }
 
+// Quicksort partitions the specified node range around its final pivot position.
 template <typename T>
 inline void Collection<T>::QuickSort(Node* low, Node* high)
 {
@@ -745,6 +930,7 @@ inline void Collection<T>::QuickSort(Node* low, Node* high)
     }
 }
 
+// Merge sort divides the sublist, recursively sorts each half, and merges the results.
 template <typename T>
 inline void Collection<T>::MergeSort(Node*& start)
 {
@@ -793,6 +979,7 @@ inline void Collection<T>::MergeSort(Node*& start)
     start = Merge(start, rightHead);
 }
 
+// Merge two already-sorted sublists into one sorted chain of existing nodes.
 template <typename T>
 inline typename Collection<T>::Node* Collection<T>::Merge(Node* left, Node* right)
 {
@@ -866,6 +1053,147 @@ inline typename Collection<T>::Node* Collection<T>::Merge(Node* left, Node* righ
     return mergedHead;
 }
 
+// -------------------------Saving and Loading----------------------------------
+
+// Save each node to a separate line, quoting string values so whitespace can be preserved.
+template <typename T>
+inline bool Collection<T>::save(const std::string& filename) const
+{
+    std::ofstream file(filename);
+
+    if (!file)
+    {
+        return false;
+    }
+
+    // max_digits10 preserves enough significant digits to reload floating-point values accurately.
+    if constexpr (std::is_floating_point_v<T>)
+    {
+        file << std::setprecision(std::numeric_limits<T>::max_digits10);
+    }
+    
+    // Traverse the list and serialize every node, including duplicate values.
+    const Node* currentNode = head;
+    
+    while (currentNode != nullptr)
+    {
+        if constexpr (std::is_same_v<T, std::string>)
+        {
+            file << std::quoted(currentNode->data) << '\n';
+        }
+        else
+        {
+            file << currentNode->data << '\n';
+        }
+        currentNode = currentNode->next;
+    }
+
+    // Closing flushes buffered output, so check the stream state after closing.
+    file.close();
+
+    if (!file)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+// Load into a temporary collection so a failed read leaves the current collection unchanged.
+template <typename T>
+inline bool Collection<T>::load(const std::string& filename)
+{
+    std::ifstream file(filename);
+
+    if (!file)
+    {
+        return false;
+    }
+    
+    // Store parsed values separately until the entire file has been read successfully.
+    Collection<T> temp;
+    T tempVal;
+    
+    // previous code...
+
+    // Read values until the end of the file, preserving every occurrence.
+    while (true)
+    {
+        if (file.eof())
+        {
+            break;
+        }
+
+        // Consume whitespace before the second EOF check so trailing whitespace is handled as normal end-of-file.
+        file >> std::ws;
+
+        if (file.bad())
+        {
+            return false;
+        }
+
+        if (file.eof())
+        {
+            break;
+        }
+
+        if (!file)
+        {
+            return false;
+        }
+
+        // Read strings with quotation handling; extract other element types normally.
+        if constexpr (std::is_same_v<T, std::string>)
+        {
+            if (!(file >> std::quoted(tempVal)))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (!(file >> tempVal))
+            {
+                return false;
+            }
+        }
+        
+        // Append every successfully read value; duplicates are intentionally retained.
+        temp.push_back(tempVal);
+    }
+    
+    // Close the input stream and verify that closing did not report a failure.
+    file.close();
+    
+    if (!file)
+    {
+        return false;
+    }
+    
+    // Determine whether the loaded values are in nondecreasing order.
+    if (temp.head != nullptr)
+    {
+        Node* currentNode = temp.head;
+        Node* nextNode = currentNode->next;
+        temp.isSorted = true;
+        
+        // Compare adjacent nodes and stop as soon as an inversion is found.
+        while (currentNode != nullptr && nextNode != nullptr && temp.sorted())
+        {
+            if (currentNode->data > nextNode->data)
+            {
+                temp.isSorted = false;
+            }
+            
+            currentNode = currentNode->next;
+            nextNode = currentNode->next;
+        }
+    }
+    
+    // Commit the loaded nodes only after reading and sortedness detection succeed.
+    *this = std::move(temp);
+    return true;
+}
 
 // ---------------------------------Global---------------------------------------
 
@@ -889,31 +1217,19 @@ inline const T& Collection<T>::back() const
     return currentNode->data;
 }
 
-// Delete all nodes and reset the collection to an empty state.
-template <typename T>
-inline void Collection<T>::clear()
-{
-    // Traversal node
-    Node* currentNode = head;
-
-    // While currentNode exists, delete all data in list
-    while (currentNode != nullptr)
-    {
-        Node* temp = currentNode->next; // Save the next node before deleting this one.
-        delete currentNode; // Release the current node.
-        currentNode = temp; // Continue with the saved next node.
-    }
-
-    // Initialize head and size
-    head = nullptr;
-    size = 0;
-}
-
 // Report whether the collection contains zero nodes.
 template <typename T>
 inline bool Collection<T>::isEmpty() const
 {
     return size == 0;
+}
+
+// Report whether the collection is sorted.
+// Return the tracked sortedness flag without traversing the collection.
+template <typename T>
+inline bool Collection<T>::sorted() const
+{
+    return isSorted;
 }
 
 // Return the stored node count.
@@ -947,9 +1263,7 @@ inline std::string Collection<T>::toString() const
     return ss.str();
 }
 
-
 // ---------------------------Private Traversal Helpers-------------------------
-
 
 // Locate the final node; an empty collection has no tail to return.
 template <typename T>
@@ -1029,111 +1343,4 @@ inline const typename Collection<T>::Node* Collection<T>::traverseToIndex(std::s
     }
 
     return currentNode;
-}
-
-
-// -------------------------Saving and Loading----------------------------------
-
-template <typename T>
-inline bool Collection<T>::save(const std::string& filename) const
-{
-    std::ofstream file(filename);
-
-    if (!file)
-    {
-        return false;
-    }
-
-    // max_digits10 preserves enough significant digits to reload floating-point values accurately.
-    if constexpr (std::is_floating_point_v<T>)
-    {
-        file << std::setprecision(std::numeric_limits<T>::max_digits10);
-    }
-    
-    const Node* currentNode = head;
-    
-    while (currentNode != nullptr)
-    {
-        if constexpr (std::is_same_v(T, std::string))
-        {
-            file << std::quoted(currentNode->data) << '\n';
-        }
-        else
-        {
-            file << currentNode->data << '\n';
-        }
-        currentNode = currentNode->next;
-    }
-
-    file.close();
-
-    if (!file)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-template <typename T>
-inline bool Collection<T>::load(const std::string& filename)
-{
-    std::ifstream file(filename);
-
-    if (!file)
-    {
-        return false;
-    }
-    
-    Collection<T> temp;
-    T tempVal;
-    
-    // previous code...
-
-    while (true)
-    {
-        if (file.eof())
-        {
-            break;
-        }
-
-        file >> std::ws;
-
-        if (file.bad())
-        {
-            return false;
-        }
-
-        if (file.eof())
-        {
-            break;
-        }
-
-        if (!file)
-        {
-            return false;
-        }
-
-        if constexpr (std::is_same_v<T, std::string>)
-        {
-            if (!(file >> std::quoted(tempVal)))
-            {
-                return false;
-            }
-        }
-        else
-        {
-            if (!(file >> tempVal))
-            {
-                return false;
-            }
-        }
-
-        if (std::find(loaded.begin(), loaded.end(), tempVal) == loaded.end())
-        {
-            // code...
-        }
-    }
-
-    // new code...
 }
