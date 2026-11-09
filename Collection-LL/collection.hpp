@@ -456,7 +456,7 @@ inline bool Collection<T>::removeAt(std::size_t index)
 template <typename T>
 inline bool Collection<T>::pop_front(T& out)
 {
-    if (head == nullptr)
+    if (isEmpty())
     {
         return false;
     }
@@ -518,7 +518,7 @@ inline bool Collection<T>::pop_back(T& out)
 template <typename T>
 inline bool Collection<T>::pop_front()
 {
-    if (head == nullptr)
+    if (isEmpty())
     {
         return false;
     }
@@ -785,7 +785,7 @@ inline std::size_t Collection<T>::search(const T& data) const
 template <typename T>
 inline bool Collection<T>::sort()
 {
-    if (head == nullptr)
+    if (isEmpty())
     {
         isSorted = true;
         return false;
@@ -1201,7 +1201,7 @@ inline bool Collection<T>::load(const std::string& filename)
 template <typename T>
 inline const T& Collection<T>::front() const
 {
-    if (head == nullptr)
+    if (isEmpty())
     {
         throw EmptyList();
     }
