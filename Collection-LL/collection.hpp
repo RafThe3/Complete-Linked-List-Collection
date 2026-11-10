@@ -4,6 +4,7 @@
 #include <cstddef> // Provides std::size_t.
 #include <limits> // Provides numeric_limits for the NOT_FOUND sentinel.
 #include <utility> // Provides std::swap().
+#include <iterator>
 #include <fstream> // Provides file input and output streams.
 #include <iomanip> // Provides std::quoted() and std::setprecision().
 #include <type_traits> // Provides compile-time type traits used to specialize file serialization.
@@ -57,6 +58,10 @@ class Collection
     bool pop_front();
     // Removes the last value without returning it; returns false if the collection is empty.
     bool pop_back();
+    // Removes the minimum value in the collection (string containing the first letter lexicographically gets deleted)
+    bool deleteMin();
+    // Removes the maximum value in the collection (string containing the last letter lexicographically gets deleted)
+    bool deleteMax();
     // Removes every value; returns true only if the collection contained at least one value.
     bool clear();
 
@@ -79,6 +84,10 @@ class Collection
     const T& at(std::size_t index) const;
     // Returns the first matching index, or NOT_FOUND when data is absent.
     std::size_t search(const T& data) const;
+    // Finds the minimum value in the collection (string containing the first letter lexicographically gets returned)
+    const T& findMin() const;
+    // Finds the maximum value in the collection (string containing the last letter lexicographically gets returned)
+    const T& findMax() const;
 
     // Sorting
     // Sorts the collection when needed; returns true if a sorting operation was performed.
@@ -590,6 +599,72 @@ inline bool Collection<T>::pop_back()
     return true;
 }
 
+// Removes the minimum value in the collection (string containing the first letter lexicographically gets deleted)
+template <typename T>
+inline bool Collection<T>::deleteMin()
+{
+    if (isEmpty())
+    {
+        return false;
+    }
+
+    if (sorted())
+    {
+        return pop_front();
+    }
+
+    Node* currentNode = head;
+    T minElement = currentNode->data;
+    std::size_t minIndex = 0;
+    std::size_t count = 0;
+
+    while (currentNode->next != nullptr)
+    {
+        currentNode = currentNode->next;
+        count++;
+        if (currentNode->data < minElement)
+        {
+            minElement = currentNode->data;
+            minIndex = count;
+        }
+    }
+
+    return removeAt(minIndex);
+}
+
+// Removes the maximum value in the collection (string containing the last letter lexicographically gets deleted)
+template <typename T>
+inline bool Collection<T>::deleteMax()
+{
+    if (isEmpty())
+    {
+        return false;
+    }
+
+    if (sorted())
+    {
+        return pop_back();
+    }
+
+    Node* currentNode = head;
+    T maxElement = currentNode->data;
+    std::size_t maxIndex = 0;
+    std::size_t count = 0;
+
+    while (currentNode->next != nullptr)
+    {
+        currentNode = currentNode->next;
+        count++;
+        if (maxElement < currentNode->data)
+        {
+            maxElement = currentNode->data;
+            maxIndex = count;
+        }
+    }
+
+    return removeAt(maxIndex);
+}
+
 // Delete all nodes and reset the collection to an empty state.
 template <typename T>
 inline bool Collection<T>::clear()
@@ -807,6 +882,66 @@ inline std::size_t Collection<T>::search(const T& data) const
 
     // Return -1 if data is not found
     return NOT_FOUND;
+}
+
+// Finds the minimum value in the collection (string containing the first letter lexicographically gets returned)
+template <typename T>
+inline const T& Collection<T>::findMin() const
+{
+    if (isEmpty())
+    {
+        throw EmptyList();
+    }
+
+    if (sorted())
+    {
+        return front();
+    }
+
+    const Node* currentNode = head;
+    const Node* minNode = head;
+
+    while (currentNode->next != nullptr)
+    {
+        currentNode = currentNode->next;
+
+        if (currentNode->data < minNode->data)
+        {
+            minNode = currentNode;
+        }
+    }
+
+    return minNode->data;
+}
+
+// Finds the maximum value in the collection (string containing the last letter lexicographically gets returned)
+template <typename T>
+inline const T& Collection<T>::findMax() const
+{
+    if (isEmpty())
+    {
+        throw EmptyList();
+    }
+
+    if (sorted())
+    {
+        return back();
+    }
+
+    const Node* currentNode = head;
+    const Node* maxNode = head;
+
+    while (currentNode->next != nullptr)
+    {
+        currentNode = currentNode->next;
+
+        if (maxNode->data < currentNode->data)
+        {
+            maxNode = currentNode;
+        }
+    }
+
+    return maxNode->data;
 }
 
 #pragma endregion
